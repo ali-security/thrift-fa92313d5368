@@ -20,14 +20,7 @@
 name: Release Rust Packages
 
 on:
-  push:
-    tags:
-      - "*"
-  pull_request:
-    branches:
-      - master
-    paths:
-      - ".github/workflows/release_rust.yml"
+  # sealed build: non-dispatch triggers removed so this workflow does not fire on the fork
   workflow_dispatch:
 
 jobs:

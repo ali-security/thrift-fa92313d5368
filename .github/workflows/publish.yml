@@ -18,10 +18,8 @@
 name: Publish
 
 on:
-  release:
-    types:
-      - prereleased
-      - released
+  # sealed build: non-dispatch triggers removed so this workflow does not fire on the fork
+  workflow_dispatch:
 
 permissions:
   contents: read

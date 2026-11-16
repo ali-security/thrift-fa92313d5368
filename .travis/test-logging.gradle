@@ -1,0 +1,19 @@
+// Sealed build: Gradle init script (copied to ~/.gradle/init.d/ by CI) that makes the
+// Test tasks print one line per test and a final per-task summary with the
+// passed/failed/skipped counts. Gradle is silent about passing tests by default,
+// so without this the CI log carries no test count. It changes no test selection.
+allprojects {
+    tasks.withType(Test).configureEach { t ->
+        t.testLogging {
+            events "passed", "skipped", "failed"
+            exceptionFormat "full"
+        }
+        t.afterSuite { desc, result ->
+            if (desc.parent == null) {
+                println "TEST SUMMARY (${t.path}): ${result.resultType} - ${result.testCount} tests, " +
+                        "${result.successfulTestCount} passed, ${result.failedTestCount} failed, " +
+                        "${result.skippedTestCount} skipped"
+            }
+        }
+    }
+}

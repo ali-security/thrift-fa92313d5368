@@ -20,8 +20,8 @@
 name: "PyPI publishing"
 
 on:
-  release:
-    types: [published]
+  # sealed build: non-dispatch triggers removed so this workflow does not fire on the fork
+  workflow_dispatch:
 
 jobs:
   pypi-publish:
