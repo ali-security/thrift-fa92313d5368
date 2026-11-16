@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Stack;
 import java.util.UUID;
 import org.apache.thrift.TByteArrayOutputStream;
+import org.apache.thrift.TConfiguration;
 import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
@@ -622,6 +623,13 @@ public class TJSONProtocol extends TProtocol {
 
   /** Reading methods. */
 
+  // Max message size from the transport configuration; some transports (e.g.
+  // TFileTransport) return a null configuration, so fall back to the default.
+  private long getMaxMessageSize() {
+    TConfiguration config = trans_.getConfiguration();
+    return config != null ? config.getMaxMessageSize() : TConfiguration.DEFAULT_MAX_MESSAGE_SIZE;
+  }
+
   // Read in a JSON string, unescaping as appropriate.. Skip reading from the
   // context if skipContext is true.
   private TByteArrayOutputStream readJSONString(boolean skipContext) throws TException {
@@ -631,15 +639,28 @@ public class TJSONProtocol extends TProtocol {
       context_.read();
     }
     readJSONSyntaxChar(QUOTE);
+    // A JSON string is quote-delimited, so unlike a length-prefixed binary
+    // string there is no declared size to reject up front. Bound the running
+    // byte count against the configured max message size so a single string
+    // cannot grow without bound, independent of any transport-level accounting.
+    long maxSize = getMaxMessageSize();
+    long count = 0;
     while (true) {
       byte ch = reader_.read();
+      count++;
+      if (count > maxSize) {
+        throw new TTransportException(
+            TTransportException.MESSAGE_SIZE_LIMIT, "Message size exceeds limit: " + maxSize);
+      }
       if (ch == QUOTE[0]) {
         break;
       }
       if (ch == ESCSEQ[0]) {
         ch = reader_.read();
+        count++;
         if (ch == ESCSEQ[1]) {
           trans_.readAll(tmpbuf_, 0, 4);
+          count += 4;
           short cu =
               (short)
                   (((short) hexVal(tmpbuf_[0]) << 12)
@@ -712,12 +733,19 @@ public class TJSONProtocol extends TProtocol {
   // not do a complete regex check to validate that this is actually a number.
   private String readJSONNumericChars() throws TException {
     StringBuilder strbld = new StringBuilder();
+    long maxSize = getMaxMessageSize();
     while (true) {
       byte ch = reader_.peek();
       if (!isJSONNumeric(ch)) {
         break;
       }
       strbld.append((char) reader_.read());
+      // Numeric literals carry no declared length either; bound the running
+      // count against the configured max message size as digits accumulate.
+      if (strbld.length() > maxSize) {
+        throw new TTransportException(
+            TTransportException.MESSAGE_SIZE_LIMIT, "Message size exceeds limit: " + maxSize);
+      }
     }
     return strbld.toString();
   }
